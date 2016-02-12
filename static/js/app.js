@@ -1,4 +1,4 @@
-var itemSize = 18,
+var itemSize = 22,
     cellSize = itemSize - 1,
     margin = {top: 120, right: 20, bottom: 20, left: 110},
     cssSelector = ".heatmap";
@@ -29,11 +29,10 @@ var get_y = function(data) {
     return d3.set(data.map(function( item ) { return item.country; } )).values();
 }
 
-
 d3.json('data.json')
     .on("load", function ( response ) {
         var width = 960 - margin.right - margin.left,
-            height = 700 - margin.top - margin.bottom;
+            height = 300 - margin.top - margin.bottom;
 
         var data = response.map(function( item ) {
             var newItem = {};
@@ -107,6 +106,7 @@ d3.json('data.json')
                 .tickFormat(function (d) {
                     return d;
                 })
+                .outerTickSize(0)
                 .orient("top");
 
             var yScale = d3.scale.ordinal()
@@ -118,6 +118,7 @@ d3.json('data.json')
                 .tickFormat(function (d) {
                     return d;
                 })
+                .outerTickSize(0)
                 .orient("left");
 
             var selection = svg.select(".squares").selectAll('.cell')
@@ -131,9 +132,11 @@ d3.json('data.json')
                     .attr('fill', 'transparent');
 
             selection.select('rect')
+                .attr('fill', function(d) { return colorScale(d.achievement); })
+                .transition()
+                .duration(500)
                 .attr('y', function(d) { return yScale(d.country); })
                 .attr('x', function(d) { return xScale(d.model); })
-                .attr('fill', function(d) { return colorScale(d.achievement); });
                 
             selection.exit().remove();
 
@@ -154,6 +157,52 @@ d3.json('data.json')
                 });
         }
 
+        var build_legend = function() {
+            var legendData = [
+                    {name: '< 95%', color: colorScale(0)},
+                    {name: '< 100%', color: colorScale(0.95)},
+                    {name: '≥ 100%', color: colorScale(1)}
+                    //{name: 'Monthly target achieved', color: t_legend_1.url()},
+                    //{name: 'TDR affiliates ≥ 20%', color: t_legend_2.url()}
+                ],
+                margin = 4;
+
+            var svg = d3.select(".heatmap-legend")
+                .append('svg')
+                .attr('width', 200)
+                .attr('height', 180);
+
+            var legend = svg.append("g")
+                .attr("class", "legendLinear")
+                .attr("transform", "translate(20,20)");
+
+            var blocks = legend.selectAll('.legend-square')
+                .data(legendData).enter()
+                .append('g');
+
+            blocks.append('rect')
+                .attr('fill', function (d, i) {
+                    return d.color;
+                })
+                .attr('width', cellSize)
+                .attr('height', cellSize)
+                .attr('y', function (d, i) {
+                    return (cellSize + margin) * i;
+                });
+
+            blocks.append('text')
+                .text(function (d) {
+                    return d.name;
+                })
+                .attr('y', function (d, i) {
+                    return (cellSize + margin) * i + cellSize / 1.4;
+                })
+                .attr('x', cellSize + margin)
+                .attr('font-size', '.8em')
+                .attr('text-anchor', 'start');
+        }
+
         display(selectedData);
+        build_legend();
 
     }).get();

@@ -1,10 +1,34 @@
-var itemSize = 22,
+var itemSize = 18,
     cellSize = itemSize - 1,
     margin = {top: 120, right: 20, bottom: 20, left: 110},
-    cssSelector = ".heatmap",
-    selectedDate = new Date(2015, 11, 1);
+    cssSelector = ".heatmap";
 
 var formatDate = d3.time.format("%Y-%m-%d");
+
+var rangeDate = document.getElementById("range-date");
+var selectSort = document.getElementById("select-sort");
+
+var populateRange = function(t) {
+    rangeDate.step = 86400000;
+    rangeDate.min = parseInt(t[0]);
+    rangeDate.max = parseInt(t[t.length - 1]);
+    rangeDate.value = t[t.length - 1];
+}
+
+var sorters = [
+    function(a, b) { return a < b ? -1 : 1; },
+    function(a, b) { return a > b ? -1 : 1; },
+    function(a, b) { return Math.random() < 0.5; }
+]
+
+var get_x = function(data) {
+    return d3.set(data.map(function( item ) { return item.model; } )).values();
+}
+
+var get_y = function(data) {
+    return d3.set(data.map(function( item ) { return item.country; } )).values();
+}
+
 
 d3.json('data.json')
     .on("load", function ( response ) {
@@ -22,34 +46,15 @@ d3.json('data.json')
             newItem.day = formatDate.parse(item.day);
 
             return newItem;
-        }).filter(function ( item ) {
-            return +item.day === +selectedDate;
         });
 
-        var x_elements = d3.set(data.map(function( item ) { return item.model; } )).values(),
-            y_elements = d3.set(data.map(function( item ) { return item.country; } )).values();
+        var t_elements = d3.set(data.map(function ( item ) { return +item.day; } )).values().sort();
 
-        var xScale = d3.scale.ordinal()
-            .domain(x_elements)
-            .rangeBands([0, x_elements.length * itemSize]);
+        var selectedData = data.filter(function ( item ) {
+            return +item.day === +t_elements[t_elements.length - 1];
+        })
 
-        var xAxis = d3.svg.axis()
-            .scale(xScale)
-            .tickFormat(function (d) {
-                return d;
-            })
-            .orient("top");
-
-        var yScale = d3.scale.ordinal()
-            .domain(y_elements)
-            .rangeBands([0, y_elements.length * itemSize]);
-
-        var yAxis = d3.svg.axis()
-            .scale(yScale)
-            .tickFormat(function (d) {
-                return d;
-            })
-            .orient("left");
+        populateRange(t_elements);
 
         var colorScale = d3.scale.threshold()
             .domain([0.95, 1])
@@ -62,31 +67,93 @@ d3.json('data.json')
             .append("g")
             .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-        var cells = svg.selectAll('rect')
-            .data(data)
-            .enter().append('g').append('rect')
-            .attr('class', 'cell')
-            .attr('width', cellSize)
-            .attr('height', cellSize)
-            .attr('y', function(d) { return yScale(d.country); })
-            .attr('x', function(d) { return xScale(d.model); })
-            .attr('fill', function(d) { return colorScale(d.achievement); });
-
         svg.append("g")
-            .attr("class", "y axis")
-            .call(yAxis)
-            .selectAll('text')
-            .attr('font-weight', 'normal');
+            .attr("class", "squares");
 
-        svg.append("g")
-            .attr("class", "x axis")
-            .call(xAxis)
-            .selectAll('text')
-            .attr('font-weight', 'normal')
-            .style("text-anchor", "start")
-            .attr("dx", ".8em")
-            .attr("dy", ".5em")
-            .attr("transform", function (d) {
-                return "rotate(-65)"
+        svg.append("g") // Add the X Axis
+            .attr("class", "y axis");
+
+        svg.append("g") // Add the X Axis
+            .attr("class", "x axis");
+
+        rangeDate.addEventListener("input", function() {
+            var selectedDate = this.value;
+
+            selectedData = data.filter(function ( item ) {
+                return +item.day === parseInt(selectedDate);
             });
+
+            display(selectedData, parseInt(selectSort.value));
+        });
+
+        selectSort.addEventListener("input", function() {
+            display(selectedData, parseInt(this.value));
+        });
+
+        var display = function(data, idSorter) {
+            if (idSorter == undefined)
+                var idSorter = 0;
+
+            var x = get_x(selectedData).sort(sorters[idSorter]),
+                y = get_y(selectedData).sort(sorters[idSorter]);
+
+
+            var xScale = d3.scale.ordinal()
+                .domain(x)
+                .rangeBands([0, x.length * itemSize]);
+
+            var xAxis = d3.svg.axis()
+                .scale(xScale)
+                .tickFormat(function (d) {
+                    return d;
+                })
+                .orient("top");
+
+            var yScale = d3.scale.ordinal()
+                .domain(y)
+                .rangeBands([0, y.length * itemSize]);
+
+            var yAxis = d3.svg.axis()
+                .scale(yScale)
+                .tickFormat(function (d) {
+                    return d;
+                })
+                .orient("left");
+
+            var selection = svg.select(".squares").selectAll('.cell')
+                .data(data);
+
+            selection.enter().append('g')
+                .attr('class', 'cell')
+                .append('rect')
+                    .attr('width', cellSize)
+                    .attr('height', cellSize)
+                    .attr('fill', 'transparent');
+
+            selection.select('rect')
+                .attr('y', function(d) { return yScale(d.country); })
+                .attr('x', function(d) { return xScale(d.model); })
+                .attr('fill', function(d) { return colorScale(d.achievement); });
+                
+            selection.exit().remove();
+
+            svg.select(".y.axis")
+                .call(yAxis)
+                .selectAll('text')
+                .attr('font-weight', 'normal');
+
+            svg.select(".x.axis")
+                .call(xAxis)
+                .selectAll('text')
+                .attr('font-weight', 'normal')
+                .style("text-anchor", "start")
+                .attr("dx", ".8em")
+                .attr("dy", ".5em")
+                .attr("transform", function (d) {
+                    return "rotate(-65)"
+                });
+        }
+
+        display(selectedData);
+
     }).get();

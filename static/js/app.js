@@ -1,17 +1,16 @@
 var itemSize = 22,
-    cellSize = 22,
+    cellSize = itemSize - 1,
     margin = {top: 120, right: 20, bottom: 20, left: 110},
     cssSelector = ".heatmap",
     selectedDate = new Date(2015, 11, 1);
 
 var formatDate = d3.time.format("%Y-%m-%d");
 
-var unique = function(d, i, self) {
-    return self.indexOf(d) == i;
-};
-
 d3.json('data.json')
     .on("load", function ( response ) {
+        var width = 960 - margin.right - margin.left,
+            height = 700 - margin.top - margin.bottom;
+
         var data = response.map(function( item ) {
             var newItem = {};
             newItem.country = item.country;
@@ -27,20 +26,34 @@ d3.json('data.json')
             return +item.day === +selectedDate;
         });
 
-        data = data.concat(data);
-        data = data.concat(data);
-        
-        var x_size = data.map(function( item ) { return item.model; } ).filter(unique).length,
-            y_size = data.map(function( item ) { return item.country; } ).filter(unique).length;
+        var x_elements = d3.set(data.map(function( item ) { return item.model; } )).values(),
+            y_elements = d3.set(data.map(function( item ) { return item.country; } )).values();
 
-        var x1 = x_size,
-            x2 = parseInt(x_size / 3),
-            y1 = 2;
-        
-        var points = [x1 * y1 + x2, x1 * y1 + x2 + 3, x1 * (y1 + 1) + x2, x1 * (y1 + 1) + x2 + 3,  x1 * (y1 + 2) + x2, x1 * (y1 + 2) + x2 + 3,  x1 * (y1 + 3) + x2, x1 * (y1 + 3) + x2 + 3, x1 * (y1 + 5) + x2 - 1, x1 * (y1 + 6) + x2, x1 * (y1 + 6) + x2 + 1, x1 * (y1 + 6) + x2 + 2, x1 * (y1 + 6) + x2 + 3, x1 * (y1 + 5) + x2 + 4]
+        var xScale = d3.scale.ordinal()
+            .domain(x_elements)
+            .rangeBands([0, x_elements.length * itemSize]);
 
-        var width = 960 - margin.right - margin.left,
-            height = 700 - margin.top - margin.bottom;
+        var xAxis = d3.svg.axis()
+            .scale(xScale)
+            .tickFormat(function (d) {
+                return d;
+            })
+            .orient("top");
+
+        var yScale = d3.scale.ordinal()
+            .domain(y_elements)
+            .rangeBands([0, y_elements.length * itemSize]);
+
+        var yAxis = d3.svg.axis()
+            .scale(yScale)
+            .tickFormat(function (d) {
+                return d;
+            })
+            .orient("left");
+
+        var colorScale = d3.scale.threshold()
+            .domain([0.95, 1])
+            .range(["#e74c3c", "#e67e22", "#2ecc71", "#2ecc71"]);
 
         var svg = d3.select(cssSelector)
             .append("svg")
@@ -55,25 +68,25 @@ d3.json('data.json')
             .attr('class', 'cell')
             .attr('width', cellSize)
             .attr('height', cellSize)
-            .attr('y', function(d, i) { return (cellSize + 1) * ( parseInt( i / x_size ) ); })
-            .attr('x', function(d, i) { return (cellSize + 1) * ( i % x_size ); })
-            .attr('fill', function(d, i) {
-                return "#"+((1<<24)*Math.random()|0).toString(16); // see http://stackoverflow.com/a/5365036
+            .attr('y', function(d) { return yScale(d.country); })
+            .attr('x', function(d) { return xScale(d.model); })
+            .attr('fill', function(d) { return colorScale(d.achievement); });
+
+        svg.append("g")
+            .attr("class", "y axis")
+            .call(yAxis)
+            .selectAll('text')
+            .attr('font-weight', 'normal');
+
+        svg.append("g")
+            .attr("class", "x axis")
+            .call(xAxis)
+            .selectAll('text')
+            .attr('font-weight', 'normal')
+            .style("text-anchor", "start")
+            .attr("dx", ".8em")
+            .attr("dy", ".5em")
+            .attr("transform", function (d) {
+                return "rotate(-65)"
             });
-
-        cells.attr('fill', function(d, i) {
-            return points.indexOf(i) > -1 ? "white" : "black";
-        });
-
-        window.setInterval(function() {
-            if (Math.random() < 0)
-                cells.attr('fill', function(d, i) {
-                    return "#"+((1<<24)*Math.random()|0).toString(16); // see http://stackoverflow.com/a/5365036
-                });
-            else
-                cells.attr('fill', function(d, i) {
-                    return points.indexOf(i) > -1 ? "white" : "black";
-                });
-        }, 1000);
-
     }).get();

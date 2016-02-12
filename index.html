@@ -2,22 +2,19 @@
 <html>
     <head>
         <meta charset="utf-8">
-        <title>Au chaud - Step 4</title>
+        <title>Au chaud - Step 5</title>
 
         <link rel="stylesheet" href="static/css/style.css">
+
+        <script src="static/js/lib/d3.v3.min.js"></script>
+
+        <script src="static/js/lib/babel.browser.min.js"></script>
+        <script src="static/js/lib/react.min.js"></script>
+        <script src="static/js/lib/react-dom.min.js"></script>
     </head>
     <body>
-        <select id="select-sort">
-            <option value="0">A-Z</option>
-            <option value="1">Z-A</option>
-            <option value="2">random</option>
-        </select>
-        <input id="range-date" type="range" value="15" max="50" min="0" step="1">
-        <div class="heatmap">
-            
-        </div>
-        <div class="heatmap-legend"></div>
-        <script type="text/javascript" src="static/js/lib/d3.v3.min.js"></script>
-        <script type="text/javascript" src="static/js/app.js"></script>
+        <div id="my-app"></div>
+        
+        <script type="text/babel" src="static/js/app.js"></script>
     </body>
 </html>

@@ -1,19 +1,16 @@
-var itemSize = 22,
+var itemSize = 15,
     cellSize = itemSize - 1,
     margin = {top: 120, right: 20, bottom: 20, left: 110},
     cssSelector = ".heatmap";
 
+var width = 960 - margin.right - margin.left,
+    height = 600 - margin.top - margin.bottom;
+
 var formatDate = d3.time.format("%Y-%m-%d");
 
-var rangeDate = document.getElementById("range-date");
-var selectSort = document.getElementById("select-sort");
-
-var populateRange = function(t) {
-    rangeDate.step = 86400000;
-    rangeDate.min = parseInt(t[0]);
-    rangeDate.max = parseInt(t[t.length - 1]);
-    rangeDate.value = t[t.length - 1];
-}
+var colorScale = d3.scale.threshold()
+    .domain([0.95, 1])
+    .range(["#e74c3c", "#e67e22", "#2ecc71", "#2ecc71"]);
 
 var sorters = [
     function(a, b) { return a < b ? -1 : 1; },
@@ -29,180 +26,196 @@ var get_y = function(data) {
     return d3.set(data.map(function( item ) { return item.country; } )).values();
 }
 
-d3.json('data.json')
-    .on("load", function ( response ) {
-        var width = 960 - margin.right - margin.left,
-            height = 300 - margin.top - margin.bottom;
+var d3Heatmap = {}
 
-        var data = response.map(function( item ) {
-            var newItem = {};
-            newItem.country = item.country;
-            newItem.model = item.product;
-            newItem.achievement = item.achievement_views_daily;
-            newItem.vAchieved = item.achieved_views
-            newItem.targetMonth = item.target_views
-            newItem.targetDay = item.target_views_daily
-            newItem.day = formatDate.parse(item.day);
+d3Heatmap.create = function (el, props, state) {
+    var svg = d3.select(cssSelector)
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-            return newItem;
-        });
+    svg.append("g")
+        .attr("class", "cells");
 
-        var t_elements = d3.set(data.map(function ( item ) { return +item.day; } )).values().sort();
+    svg.append("g") // Add the X Axis
+        .attr("class", "y axis");
 
-        var selectedData = data.filter(function ( item ) {
-            return +item.day === +t_elements[t_elements.length - 1];
+    svg.append("g") // Add the X Axis
+        .attr("class", "x axis");
+
+    this.update(el, state);
+}
+
+d3Heatmap.update = function (el, state) {
+    this._drawpoints(el, state);
+}
+
+d3Heatmap._drawpoints = function (el, state) {
+    var g = d3.select(el).selectAll('.cells');
+
+    var xScale = d3.scale.ordinal()
+        .domain(state.x)
+        .rangeBands([0, state.x.length * itemSize]);
+
+    var xAxis = d3.svg.axis()
+        .scale(xScale)
+        .tickFormat(function (d) {
+            return d;
         })
+        .outerTickSize(0)
+        .orient("top");
 
-        populateRange(t_elements);
+    var yScale = d3.scale.ordinal()
+        .domain(state.y)
+        .rangeBands([0, state.y.length * itemSize]);
 
-        var colorScale = d3.scale.threshold()
-            .domain([0.95, 1])
-            .range(["#e74c3c", "#e67e22", "#2ecc71", "#2ecc71"]);
+    var yAxis = d3.svg.axis()
+        .scale(yScale)
+        .tickFormat(function (d) {
+            return d;
+        })
+        .outerTickSize(0)
+        .orient("left");
 
-        var svg = d3.select(cssSelector)
-            .append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-            .append("g")
-            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    var cell = g.selectAll('.cell')
+        .data(state.data);
 
-        svg.append("g")
-            .attr("class", "squares");
+    cell.enter().append('g')
+        .attr('class', 'cell')
+        .append('rect')
+            .attr('width', cellSize)
+            .attr('height', cellSize)
+            .attr('fill', 'transparent');
 
-        svg.append("g") // Add the X Axis
-            .attr("class", "y axis");
+    cell.select('rect')
+        .attr('fill', function(d) { return colorScale(d.achievement); })
+        .transition()
+        .duration(500)
+            .attr('y', function(d) { return yScale(d.country); })
+            .attr('x', function(d) { return xScale(d.model); });
 
-        svg.append("g") // Add the X Axis
-            .attr("class", "x axis");
+    cell.exit().remove();
 
-        rangeDate.addEventListener("input", function() {
-            var selectedDate = this.value;
+    d3.select(el).select(".y.axis")
+        .call(yAxis)
+        .selectAll('text')
+        .attr('font-weight', 'normal');
 
-            selectedData = data.filter(function ( item ) {
-                return +item.day === parseInt(selectedDate);
-            });
-
-            display(selectedData, parseInt(selectSort.value));
+    d3.select(el).select(".x.axis")
+        .call(xAxis)
+        .selectAll('text')
+        .attr('font-weight', 'normal')
+        .style("text-anchor", "start")
+        .attr("dx", ".8em")
+        .attr("dy", ".5em")
+        .attr("transform", function (d) {
+            return "rotate(-65)"
         });
-
-        selectSort.addEventListener("input", function() {
-            display(selectedData, parseInt(this.value));
-        });
-
-        var display = function(data, idSorter) {
-            if (idSorter == undefined)
-                var idSorter = 0;
-
-            var x = get_x(selectedData).sort(sorters[idSorter]),
-                y = get_y(selectedData).sort(sorters[idSorter]);
+}
 
 
-            var xScale = d3.scale.ordinal()
-                .domain(x)
-                .rangeBands([0, x.length * itemSize]);
-
-            var xAxis = d3.svg.axis()
-                .scale(xScale)
-                .tickFormat(function (d) {
-                    return d;
-                })
-                .outerTickSize(0)
-                .orient("top");
-
-            var yScale = d3.scale.ordinal()
-                .domain(y)
-                .rangeBands([0, y.length * itemSize]);
-
-            var yAxis = d3.svg.axis()
-                .scale(yScale)
-                .tickFormat(function (d) {
-                    return d;
-                })
-                .outerTickSize(0)
-                .orient("left");
-
-            var selection = svg.select(".squares").selectAll('.cell')
-                .data(data);
-
-            selection.enter().append('g')
-                .attr('class', 'cell')
-                .append('rect')
-                    .attr('width', cellSize)
-                    .attr('height', cellSize)
-                    .attr('fill', 'transparent');
-
-            selection.select('rect')
-                .attr('fill', function(d) { return colorScale(d.achievement); })
-                .transition()
-                .duration(500)
-                .attr('y', function(d) { return yScale(d.country); })
-                .attr('x', function(d) { return xScale(d.model); })
-                
-            selection.exit().remove();
-
-            svg.select(".y.axis")
-                .call(yAxis)
-                .selectAll('text')
-                .attr('font-weight', 'normal');
-
-            svg.select(".x.axis")
-                .call(xAxis)
-                .selectAll('text')
-                .attr('font-weight', 'normal')
-                .style("text-anchor", "start")
-                .attr("dx", ".8em")
-                .attr("dy", ".5em")
-                .attr("transform", function (d) {
-                    return "rotate(-65)"
-                });
+var HeatMap = React.createClass({
+    propTypes: {
+        data: React.PropTypes.array
+        //domain: React.PropTypes.object
+    },
+    getState : function () {
+        return {
+            data: this.props.data,
+            x: get_x(this.props.data).sort(sorters[this.props.dataSort]),
+            y: get_y(this.props.data).sort(sorters[this.props.dataSort])
         }
+    },
+    componentDidMount : function () {
+        var el = this.getDOMNode();
+        d3Heatmap.create(el, {}, this.getState());
+    },
+    componentDidUpdate: function() {
+        var el = this.getDOMNode();
+        d3Heatmap.update(el, this.getState());
+    },
+    render : function () {
+        return (
+            <div className="heatmap"></div>
+        )
+    }
+});
 
-        var build_legend = function() {
-            var legendData = [
-                    {name: '< 95%', color: colorScale(0)},
-                    {name: '< 100%', color: colorScale(0.95)},
-                    {name: '≥ 100%', color: colorScale(1)}
-                    //{name: 'Monthly target achieved', color: t_legend_1.url()},
-                    //{name: 'TDR affiliates ≥ 20%', color: t_legend_2.url()}
-                ],
-                margin = 4;
+var App = React.createClass({
+    getInitialState : function () {
+        return {
+            data : [],
+            selectedData: [],
+            dataSort: 0
+        }
+    },
+    componentDidMount : function () {
+        var _ = this;
 
-            var svg = d3.select(".heatmap-legend")
-                .append('svg')
-                .attr('width', 200)
-                .attr('height', 180);
+        d3.json(this.props.source)
+            .on("load", function ( response ) {
+                var data = response.map(function( item ) {
+                    var newItem = {};
+                    newItem.country = item.country;
+                    newItem.model = item.product;
+                    newItem.achievement = item.achievement_views_daily;
+                    newItem.vAchieved = item.achieved_views
+                    newItem.targetMonth = item.target_views
+                    newItem.targetDay = item.target_views_daily
+                    newItem.day = formatDate.parse(item.day);
 
-            var legend = svg.append("g")
-                .attr("class", "legendLinear")
-                .attr("transform", "translate(20,20)");
-
-            var blocks = legend.selectAll('.legend-square')
-                .data(legendData).enter()
-                .append('g');
-
-            blocks.append('rect')
-                .attr('fill', function (d, i) {
-                    return d.color;
-                })
-                .attr('width', cellSize)
-                .attr('height', cellSize)
-                .attr('y', function (d, i) {
-                    return (cellSize + margin) * i;
+                    return newItem;
                 });
 
-            blocks.append('text')
-                .text(function (d) {
-                    return d.name;
-                })
-                .attr('y', function (d, i) {
-                    return (cellSize + margin) * i + cellSize / 1.4;
-                })
-                .attr('x', cellSize + margin)
-                .attr('font-size', '.8em')
-                .attr('text-anchor', 'start');
-        }
+                var t_elements = d3.set(data.map(function ( item ) { return +item.day; } )).values().sort();
 
-        display(selectedData);
-        build_legend();
+                var selectedData = data.filter(function ( item ) {
+                    return +item.day === +t_elements[t_elements.length - 1];
+                });
 
-    }).get();
+                _.setState({
+                    data: data,
+                    selectedData: selectedData
+                });
+
+                _.refs.rangeDate.max = parseInt(t_elements[t_elements.length - 1]);
+                _.refs.rangeDate.min = parseInt(t_elements[0])
+                _.refs.rangeDate.step = 86400000;
+                _.refs.rangeDate.value = t_elements[t_elements.length - 1];
+            }).get();
+    },
+    changeSort: function () {
+        this.setState({
+            dataSort: this.refs.selectSort.value
+        });
+    },
+    filterData: function () {
+        var _ = this;
+
+        var selectedData = this.state.data.filter(function ( item ) {
+            return +item.day === parseInt(_.refs.rangeDate.value);
+        });
+
+        _.setState({
+            date: this.refs.rangeDate.value,
+            selectedData: selectedData,
+        });
+    },
+    render : function () {
+        return (
+            <div className="app">
+                <select ref="selectSort" onChange={this.changeSort} >
+                    <option value="0">A-Z</option>
+                    <option value="1">Z-A</option>
+                    <option value="2">random</option>
+                </select>
+                <input className="rangeDate" ref="rangeDate" type="range" valuemax="50" min="0" step="1" onChange={this.filterData} />
+                <HeatMap data={this.state.selectedData} dataSort={this.state.dataSort} />
+            </div>
+        );
+    }
+});
+
+ReactDOM.render(<App source="data.json" />, document.getElementById("my-app"));
